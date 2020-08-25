@@ -286,20 +286,16 @@ mod tests {
 
     #[test]
     fn day5_part_one() {
-        let mut state = state_from_string(input_day5());
-        state.input.push(1);
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 11049715])
+        assert_output(
+            input_day5(),
+            Some(1),
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 11049715],
+        )
     }
 
     #[test]
     fn day5_part_two() {
-        let mut state = state_from_string(input_day5());
-        state.input.push(5);
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, vec![2140710])
+        assert_output(input_day5(), Some(5), vec![2140710])
     }
 
     //    fn input_day7() -> &'static str {
@@ -312,36 +308,36 @@ mod tests {
 
     #[test]
     fn relative_base() {
-        let mut state =
-            state_from_string("109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99");
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(
-            state.output,
-            vec![109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99]
+        assert_output(
+            "109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99",
+            None,
+            vec![
+                109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
+            ],
         )
     }
 
     #[test]
     fn large_numbers() {
-        let mut state = state_from_string("104,1125899906842624,99");
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, vec![1125899906842624]);
-
-        state = state_from_string("1102,34915192,34915192,7,4,7,99,0");
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, vec![1219070632396864]);
+        assert_output("104,1125899906842624,99", None, vec![1125899906842624]);
+        assert_output(
+            "1102,34915192,34915192,7,4,7,99,0",
+            None,
+            vec![1219070632396864],
+        )
     }
 
     #[test]
     fn day9_part_one() {
-        let mut state = state_from_string(input_day9());
-        state.input.push(1);
+        assert_output(input_day9(), Some(1), vec![3765554916])
+    }
+
+    fn assert_output(intcode: &str, input: Option<i64>, expected_output: Vec<i64>) {
+        let mut state = state_from_string(intcode);
+        input.map(|v| state.input.push(v));
 
         assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, vec![3765554916])
+        assert_eq!(state.output, expected_output)
     }
 
     //    #[test]
