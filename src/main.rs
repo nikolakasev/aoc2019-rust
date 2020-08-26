@@ -321,11 +321,8 @@ mod tests {
         assert_output(input_day9(), Some(1), vec![3765554916])
     }
 
-    //todo refactor with partial! and map
     fn assert_output(intcode: &str, input: Option<i64>, expected_output: Vec<i64>) {
-        let result = computer(intcode, input);
-        assert_eq!(result.is_ok(), true);
-        assert_eq!(result.unwrap(), expected_output)
+        assert_eq!(computer(intcode, input).unwrap(), expected_output)
     }
 
     #[test]
