@@ -1,4 +1,4 @@
-use crate::ComputeResult::Halt;
+use crate::ComputeResult::{CanContinue, Halt, WaitingForInput};
 
 fn main() {
     let input = "1,0,0,3,1,1,2,3,1,3,4,3,1,5,0,3,2,6,1,19,1,19,5,23,2,9,23,27,1,5,27,31,1,5,31,35,1,35,13,39,1,39,9,43,1,5,43,47,1,47,6,51,1,51,13,55,1,55,9,59,1,59,13,63,2,63,13,67,1,67,10,71,1,71,6,75,2,10,75,79,2,10,79,83,1,5,83,87,2,6,87,91,1,91,6,95,1,95,13,99,2,99,13,103,1,103,9,107,1,10,107,111,2,111,13,115,1,10,115,119,1,10,119,123,2,13,123,127,2,6,127,131,1,13,131,135,1,135,2,139,1,139,6,0,99,2,0,14,0";
@@ -24,6 +24,8 @@ struct State {
 
 enum ComputeResult {
     Halt,
+    CanContinue,
+    WaitingForInput,
 }
 
 //todo turn into an enumeration instead of using u8 for the parameter modes?
@@ -87,7 +89,23 @@ fn get_memory_address(parameter_mode: u8, pointer: u32, state: &State) -> i64 {
     }
 }
 
-fn computer(state: &mut State) -> Result<ComputeResult, String> {
+fn computer(intcode: &str, input: Option<i64>) -> Result<Vec<i64>, &str> {
+    let mut state = state_from_string(intcode);
+    input.map(|v| state.input.push(v));
+
+    loop {
+        match compute(&mut state) {
+            Ok(r) => match r {
+                Halt | WaitingForInput => break Ok(state.output),
+                CanContinue => continue,
+            },
+            //todo refactor the nested match and simplify the error mapping
+            Err(_) => break Err("bam"),
+        }
+    }
+}
+
+fn compute(state: &mut State) -> Result<ComputeResult, String> {
     let offset = state.instruction_pointer;
 
     //todo is this defensive programming a good idea?
@@ -112,7 +130,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.intcode[memory_address as usize] = first_parameter + second_parameter;
         state.instruction_pointer += 4;
 
-        computer(state)
+        Ok(CanContinue)
     }
     //multiply
     else if opcode == 2 {
@@ -125,7 +143,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.intcode[memory_address as usize] = first_parameter * second_parameter;
         state.instruction_pointer += 4;
 
-        computer(state)
+        Ok(CanContinue)
     }
     //input
     else if opcode == 3 {
@@ -139,12 +157,9 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
                 state.intcode[memory_address as usize] = v as i64;
                 state.instruction_pointer += 2;
 
-                computer(state)
+                Ok(CanContinue)
             }
-            None => {
-                let error = format!("Input expected, but none provided.");
-                Err(error)
-            }
+            None => Ok(WaitingForInput),
         }
     }
     //output
@@ -154,7 +169,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.output.push(value_to_output);
         state.instruction_pointer += 2;
 
-        computer(state)
+        Ok(CanContinue)
     }
     //jump it true
     else if opcode == 5 {
@@ -167,7 +182,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
             state.instruction_pointer += 3;
         }
 
-        computer(state)
+        Ok(CanContinue)
     }
     //jump it false
     else if opcode == 6 {
@@ -180,7 +195,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
             state.instruction_pointer += 3;
         }
 
-        computer(state)
+        Ok(CanContinue)
     }
     //less than
     //todo refactor because the only difference in the logic for opcode 7 and 8 is '<' vs. '==', lambda or something?
@@ -199,7 +214,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.intcode[memory_address as usize] = value;
         state.instruction_pointer += 4;
 
-        computer(state)
+        Ok(CanContinue)
     }
     //equals
     else if opcode == 8 {
@@ -217,7 +232,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.intcode[memory_address as usize] = value;
         state.instruction_pointer += 4;
 
-        computer(state)
+        Ok(CanContinue)
     }
     //adjust relative base
     else if opcode == 9 {
@@ -226,7 +241,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
         state.relative_base += first_parameter;
         state.instruction_pointer += 2;
 
-        computer(state)
+        Ok(CanContinue)
     } else if opcode == 99 {
         Ok(Halt)
     } else {
@@ -237,7 +252,7 @@ fn computer(state: &mut State) -> Result<ComputeResult, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{computer, state_from_string, str_to_intcode};
+    use crate::{computer, str_to_intcode};
 
     #[test]
     fn can_parse_intcode() {
@@ -245,39 +260,13 @@ mod tests {
     }
 
     #[test]
-    fn small_programs() {
-        // let add = "1,0,0,0,99";
-        // let multiply = "2,3,0,3,99";
-        // let multi_put_at_the_end = "2,4,4,5,99,0";
-        let thirty = "1,1,1,4,99,5,6,0,99";
-        let mut state = state_from_string(thirty);
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.intcode.first().unwrap(), &30i64)
-    }
-
-    #[test]
-    fn day2_part_one() {
-        let mut state = state_from_string("1,12,2,3,1,1,2,3,1,3,4,3,1,5,0,3,2,6,1,19,1,19,5,23,2,9,23,27,1,5,27,31,1,5,31,35,1,35,13,39,1,39,9,43,1,5,43,47,1,47,6,51,1,51,13,55,1,55,9,59,1,59,13,63,2,63,13,67,1,67,10,71,1,71,6,75,2,10,75,79,2,10,79,83,1,5,83,87,2,6,87,91,1,91,6,95,1,95,13,99,2,99,13,103,1,103,9,107,1,10,107,111,2,111,13,115,1,10,115,119,1,10,119,123,2,13,123,127,2,6,127,131,1,13,131,135,1,135,2,139,1,139,6,0,99,2,0,14,0");
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.intcode.first().unwrap(), &4090689i64)
-    }
-
-    #[test]
     fn input_output() {
-        let mut state = state_from_string("3,0,4,0,99");
-        state.input.push(55);
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output.first().unwrap(), &55i64)
+        assert_output("3,0,4,0,99", Some(55), vec![55])
     }
 
     #[test]
     fn parameter_modes() {
-        let mut state = state_from_string("1002,4,3,4,33");
-
-        assert_eq!(computer(&mut state).is_ok(), true);
+        assert_output("1002,4,3,4,33", None, vec![])
     }
 
     fn input_day5() -> &'static str {
@@ -332,20 +321,15 @@ mod tests {
         assert_output(input_day9(), Some(1), vec![3765554916])
     }
 
+    //todo refactor with partial! and map
     fn assert_output(intcode: &str, input: Option<i64>, expected_output: Vec<i64>) {
-        let mut state = state_from_string(intcode);
-        input.map(|v| state.input.push(v));
-
-        assert_eq!(computer(&mut state).is_ok(), true);
-        assert_eq!(state.output, expected_output)
+        let result = computer(intcode, input);
+        assert_eq!(result.is_ok(), true);
+        assert_eq!(result.unwrap(), expected_output)
     }
 
-    //    #[test]
-    //    fn day9_part_two() {
-    //        let mut state = state_from_string(input_day9());
-    //        state.input.push(2);
-    //
-    //        assert_eq!(computer(&mut state).is_ok(), true);
-    //        assert_eq!(state.output, vec![2140710])
-    //    }
+    #[test]
+    fn day9_part_two() {
+        assert_output(input_day9(), Some(2), vec![76642])
+    }
 }
