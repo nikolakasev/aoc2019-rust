@@ -124,6 +124,7 @@ fn computer(intcode: &str, input: Vec<i64>) -> Result<Vec<i64>, &str> {
 
 fn pop_and_send(state: &mut State, rx: &Sender<i64>) {
     loop {
+        //todo for future use-cases, this might not be desired behaviour, replace with drain
         match state.output.pop() {
             None => break,
             Some(v) => rx.send(v),
