@@ -122,17 +122,24 @@ fn computer(intcode: &str, input: Vec<i64>) -> Result<Vec<i64>, &str> {
     }
 }
 
-fn pop_and_send(state: &mut State, rx: &Sender<i64>) {
+fn pop_and_send(state: &mut State, rx: &Sender<i64>) -> i64 {
+    let mut last = 0;
     loop {
         //todo for future use-cases, this might not be desired behaviour, replace with drain
         match state.output.pop() {
-            None => break,
-            Some(v) => rx.send(v),
+            None => break last,
+            Some(v) => {
+                last = v;
+                rx.send(v)
+            }
         };
     }
 }
 
-fn five_amplifiers_in_a_feedback_loop(intcode: &'static str, phase_setting: Vec<i64>) -> i64 {
+fn five_amplifiers_in_a_feedback_loop(
+    intcode: &'static str,
+    phase_setting: Vec<i64>,
+) -> Option<i64> {
     assert_eq!(
         phase_setting.len(),
         5,
@@ -146,14 +153,14 @@ fn five_amplifiers_in_a_feedback_loop(intcode: &'static str, phase_setting: Vec<
     let (tx_d, rx_d): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_e, rx_e): (Sender<i64>, Receiver<i64>) = mpsc::channel();
 
-    let lambda = move |name: &str, tx: Sender<i64>, rx: Receiver<i64>| {
+    let lambda = move |name: &str, tx: Sender<i64>, rx: Receiver<i64>| -> i64 {
         let mut state = state_from_string(intcode);
 
         loop {
             match compute(&mut state) {
                 Ok(r) => match r {
                     Halt => {
-                        pop_and_send(&mut state, &tx);
+                        break pop_and_send(&mut state, &tx);
                     }
 
                     WaitingForInput => {
@@ -187,9 +194,9 @@ fn five_amplifiers_in_a_feedback_loop(intcode: &'static str, phase_setting: Vec<
     let _b = thread::spawn(move || lambda("B", tx_c, rx_b));
     let _c = thread::spawn(move || lambda("C", tx_d, rx_c));
     let _d = thread::spawn(move || lambda("D", tx_e, rx_d));
-    let _e = thread::spawn(move || lambda("E", tx_a, rx_e));
+    let e = thread::spawn(move || lambda("E", tx_a, rx_e));
 
-    0
+    e.join().ok()
 }
 
 fn compute(state: &mut State) -> Result<ComputeResult, String> {
@@ -407,9 +414,14 @@ mod tests {
         );
 
         assert_eq!(
-            five_amplifiers_in_a_feedback_loop("3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5",
-        vec![9, 8, 7, 6, 5]),
-            139629729)
+            five_amplifiers_in_a_feedback_loop("3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5", 
+                                               vec![9, 8, 7, 6, 5]),
+            Some(139629729));
+
+        assert_eq!(
+            five_amplifiers_in_a_feedback_loop("3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,-5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10", 
+                                               vec![9, 7, 8, 5, 6]),
+            Some(18216))
     }
 
     //    #[test]
