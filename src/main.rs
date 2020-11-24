@@ -181,12 +181,13 @@ fn five_amplifiers_in_a_feedback_loop(
         }
     };
 
-    tx_a.send(phase_setting[0] as i64);
-    tx_a.send(0);
-    tx_b.send(phase_setting[1] as i64);
-    tx_c.send(phase_setting[2] as i64);
-    tx_d.send(phase_setting[3] as i64);
-    tx_e.send(phase_setting[4] as i64);
+    tx_a.send(phase_setting[0] as i64)
+        .and_then(|_| tx_a.send(0))
+        .and_then(|_| tx_b.send(phase_setting[1] as i64))
+        .and_then(|_| tx_c.send(phase_setting[2] as i64))
+        .and_then(|_| tx_d.send(phase_setting[3] as i64))
+        .and_then(|_| tx_e.send(phase_setting[4] as i64))
+        .unwrap();
 
     let _a = thread::spawn(move || lambda("A", tx_b, rx_a));
     let _b = thread::spawn(move || lambda("B", tx_c, rx_b));
