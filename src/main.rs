@@ -121,7 +121,7 @@ fn computer(intcode: &str, input: Vec<i64>) -> Result<Vec<i64>, String> {
     }
 }
 
-fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i64>) -> i64 {
+fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i64>) {
     let mut state = state_from_string(intcode);
 
     loop {
@@ -150,14 +150,12 @@ fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i64>)
     }
 }
 
-fn pop_and_send(state: &mut State, rx: &Sender<i64>) -> i64 {
-    let mut last = 0;
+fn pop_and_send(state: &mut State, rx: &Sender<i64>) {
     loop {
         //todo for future use-cases, this might not be desired behaviour, replace with drain
         match state.output.pop() {
-            None => break last,
+            None => break,
             Some(v) => {
-                last = v;
                 rx.send(v).unwrap();
             }
         };
