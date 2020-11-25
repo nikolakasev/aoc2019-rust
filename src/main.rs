@@ -121,6 +121,35 @@ fn computer(intcode: &str, input: Vec<i64>) -> Result<Vec<i64>, String> {
     }
 }
 
+fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i64>) -> i64 {
+    let mut state = state_from_string(intcode);
+
+    loop {
+        match compute(&mut state) {
+            Ok(r) => match r {
+                Halt => {
+                    break pop_and_send(&mut state, &tx);
+                }
+
+                WaitingForInput => {
+                    pop_and_send(&mut state, &tx);
+
+                    match rx.recv() {
+                        Ok(v) => {
+                            state.input.push(v);
+                            continue;
+                        }
+                        Err(e) => panic!("{} error: {}", name, e),
+                    }
+                }
+
+                CanContinue => continue,
+            },
+            Err(e) => panic!("{} error: {}", name, e),
+        }
+    }
+}
+
 fn pop_and_send(state: &mut State, rx: &Sender<i64>) -> i64 {
     let mut last = 0;
     loop {
@@ -129,7 +158,7 @@ fn pop_and_send(state: &mut State, rx: &Sender<i64>) -> i64 {
             None => break last,
             Some(v) => {
                 last = v;
-                rx.send(v) //.unwrap(); breaks for day 7
+                rx.send(v).unwrap();
             }
         };
     }
@@ -146,40 +175,12 @@ fn five_amplifiers_in_a_feedback_loop(
         phase_setting.len()
     );
 
+    let (tx_controller, rx_controller): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_a, rx_a): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_b, rx_b): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_c, rx_c): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_d, rx_d): (Sender<i64>, Receiver<i64>) = mpsc::channel();
     let (tx_e, rx_e): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-
-    let lambda = move |name: &str, tx: Sender<i64>, rx: Receiver<i64>| -> i64 {
-        let mut state = state_from_string(intcode);
-
-        loop {
-            match compute(&mut state) {
-                Ok(r) => match r {
-                    Halt => {
-                        break pop_and_send(&mut state, &tx);
-                    }
-
-                    WaitingForInput => {
-                        pop_and_send(&mut state, &tx);
-
-                        match rx.recv() {
-                            Ok(v) => {
-                                state.input.push(v);
-                                continue;
-                            }
-                            Err(e) => panic!("{} error: {}", name, e),
-                        }
-                    }
-
-                    CanContinue => continue,
-                },
-                Err(e) => panic!("{} error: {}", name, e),
-            }
-        }
-    };
 
     tx_a.send(phase_setting[0] as i64)
         .and_then(|_| tx_a.send(0))
@@ -189,13 +190,24 @@ fn five_amplifiers_in_a_feedback_loop(
         .and_then(|_| tx_e.send(phase_setting[4] as i64))
         .unwrap();
 
-    let _a = thread::spawn(move || lambda("A", tx_b, rx_a));
-    let _b = thread::spawn(move || lambda("B", tx_c, rx_b));
-    let _c = thread::spawn(move || lambda("C", tx_d, rx_c));
-    let _d = thread::spawn(move || lambda("D", tx_e, rx_d));
-    let e = thread::spawn(move || lambda("E", tx_a, rx_e));
+    let _a = thread::spawn(move || async_computer(intcode, "A", rx_a, tx_b));
+    let _b = thread::spawn(move || async_computer(intcode, "B", rx_b, tx_c));
+    let _c = thread::spawn(move || async_computer(intcode, "C", rx_c, tx_d));
+    let _d = thread::spawn(move || async_computer(intcode, "D", rx_d, tx_e));
+    let _e = thread::spawn(move || async_computer(intcode, "E", rx_e, tx_controller));
 
-    e.join().ok()
+    loop {
+        match rx_controller.recv() {
+            //forward the from E to A
+            Ok(v) => match tx_a.send(v) {
+                Ok(_) => continue,
+                //isn't able to send, because A halted already,
+                //so this is the last output from E
+                Err(_) => break Some(v),
+            },
+            Err(e) => panic!(e),
+        }
+    }
 }
 
 fn compute(state: &mut State) -> Result<ComputeResult, String> {
