@@ -161,6 +161,44 @@ impl World {
             painted: HashSet::new(),
         }
     }
+
+    fn known_bounds(&self) -> (Vector2<i8>, Vector2<i8>) {
+        //todo how efficint is this? is there a way to reuse the iterator?
+        let min_x = self
+            .known
+            .clone()
+            .into_iter()
+            .map(|(location, _)| location)
+            .map(|v| v.x)
+            .min()
+            .unwrap();
+        let max_x = self
+            .known
+            .clone()
+            .into_iter()
+            .map(|(location, _)| location)
+            .map(|v| v.x)
+            .max()
+            .unwrap();
+        let min_y = self
+            .known
+            .clone()
+            .into_iter()
+            .map(|(location, _)| location)
+            .map(|v| v.y)
+            .min()
+            .unwrap();
+        let max_y = self
+            .known
+            .clone()
+            .into_iter()
+            .map(|(location, _)| location)
+            .map(|v| v.y)
+            .max()
+            .unwrap();
+
+        (Vector2::new(min_x, min_y), Vector2::new(max_x, max_y))
+    }
 }
 
 fn main() {
@@ -181,7 +219,7 @@ fn main() {
 
     let mut world = World::new();
 
-    tx_input.send(Tile::Black as i64);
+    tx_input.send(Tile::White as i64);
 
     loop {
         match rx_output.recv() {
@@ -210,13 +248,13 @@ fn main() {
                         None => {
                             println!("{:?} is new", new_location);
 
-                            tx_input.send(Tile::Black as i64).unwrap();
+                            tx_input.send(Tile::Black as i64);
                         }
                         Some(t) => {
                             println!("{:?} is known with tile {}", new_location, t);
 
                             tile = *t;
-                            tx_input.send(tile as i64).unwrap();
+                            tx_input.send(tile as i64);
                         }
                     }
 
@@ -229,8 +267,32 @@ fn main() {
             Err(_) => break,
         }
     }
+
+    print_world(&world)
 }
 
 fn move_robot(robot_location: Vector2<i8>, direction: &Direction) -> Vector2<i8> {
     direction.one_step_from(robot_location)
+}
+
+fn print_world(world: &World) {
+    let (min, max) = world.known_bounds();
+
+    // The escape sequence `\x1B[2J` clear the screen
+    let lines: String = std::iter::once("\x1B[2J\n")
+        .chain((min.y..=max.y).flat_map(|y| {
+            (min.x..=max.x)
+                .map(move |x| match world.known.get(&Vector2::new(x, y)) {
+                    //todo use the Display trait that Tile implements
+                    Some(tile) => match tile {
+                        Tile::White => "#",
+                        Tile::Black => ".",
+                    },
+                    None => ".",
+                })
+                .chain(std::iter::once("\n"))
+        }))
+        .collect();
+
+    print!("{}", lines);
 }
