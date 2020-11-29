@@ -1,4 +1,3 @@
-mod day11;
 pub mod intcode;
 
 fn main() {
