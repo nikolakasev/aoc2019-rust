@@ -62,8 +62,19 @@ fn get_value(parameter_mode: u8, pointer: u32, state: &State) -> i64 {
     }
 }
 
-fn extend_memory(memory_index: u32, state: &mut State) {
-    if memory_index >= state.intcode.len() as u32 {
+fn extend_memory(parameters: Vec<(u8, u32)>, state: &mut State) {
+    //get the maximum memory address
+    let memory_index = parameters
+        .into_iter()
+        //not relevant for immediate mode, so only for position and relative base modes
+        .filter(|(mode, _)| *mode == 0 || *mode == 2)
+        //calculate the memory address for each parameter
+        .map(|(mode, pointer)| get_memory_address(mode, pointer, state))
+        .max()
+        .unwrap() as usize;
+
+    //extend the memory of necessary
+    if memory_index >= state.intcode.len() {
         state.intcode.resize((memory_index + 1) as usize, 0);
     }
 }
@@ -101,9 +112,12 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
 
     //add
     if opcode == 1 {
-        let memory_address = get_memory_address(a, offset + 3, state);
-        extend_memory(memory_address as u32, state);
+        extend_memory(
+            vec![(c, offset + 1), (b, offset + 2), (a, offset + 3)],
+            state,
+        );
 
+        let memory_address = get_memory_address(a, offset + 3, state);
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
 
@@ -114,9 +128,12 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
     }
     //multiply
     else if opcode == 2 {
-        let memory_address = get_memory_address(a, offset + 3, state);
-        extend_memory(memory_address as u32, state);
+        extend_memory(
+            vec![(c, offset + 1), (b, offset + 2), (a, offset + 3)],
+            state,
+        );
 
+        let memory_address = get_memory_address(a, offset + 3, state);
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
 
@@ -132,7 +149,7 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
         //attempt to read from the input
         match state.input.pop() {
             Some(v) => {
-                extend_memory(memory_address as u32, state);
+                extend_memory(vec![(c, offset + 1)], state);
 
                 state.intcode[memory_address as usize] = v as i64;
                 state.instruction_pointer += 2;
@@ -180,9 +197,12 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
     //less than
     //todo refactor because the only difference in the logic for opcode 7 and 8 is '<' vs. '==', lambda or something?
     else if opcode == 7 {
-        let memory_address = get_memory_address(a, offset + 3, state);
-        extend_memory(memory_address as u32, state);
+        extend_memory(
+            vec![(c, offset + 1), (b, offset + 2), (a, offset + 3)],
+            state,
+        );
 
+        let memory_address = get_memory_address(a, offset + 3, state);
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
         let value = if first_parameter < second_parameter {
@@ -198,9 +218,12 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
     }
     //equals
     else if opcode == 8 {
-        let memory_address = get_memory_address(a, offset + 3, state);
-        extend_memory(memory_address as u32, state);
+        extend_memory(
+            vec![(c, offset + 1), (b, offset + 2), (a, offset + 3)],
+            state,
+        );
 
+        let memory_address = get_memory_address(a, offset + 3, state);
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
         let value = if first_parameter == second_parameter {
@@ -489,5 +512,15 @@ mod tests {
     #[test]
     fn day9_part_two() {
         assert_output(input_day9(), Some(2), vec![76642])
+    }
+
+    #[test]
+    fn extend_memory() {
+        let input_works = "1,12,10,1109,4,1109,99,0,0,0,0,0,7";
+        assert_output(input_works, None, vec![7]);
+
+        //the regression bug is because only the write parameter is checked, not all of them for the maximum address
+        let input_would_break = "1,1109,12,10,4,10,99,0,0,0,0,0,7";
+        assert_output(input_would_break, None, vec![7]);
     }
 }
