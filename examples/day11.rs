@@ -121,30 +121,6 @@ impl Turn {
     }
 }
 
-enum Sprite {
-    East,
-    West,
-    North,
-    South,
-    White,
-    Black,
-}
-
-impl fmt::Display for Sprite {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let string = match self {
-            Sprite::East => "►",
-            Sprite::West => "◄",
-            Sprite::North => "▲",
-            Sprite::South => "▼",
-            Sprite::White => "#",
-            Sprite::Black => ".",
-        };
-
-        write!(f, "{}", string)
-    }
-}
-
 struct World {
     known: HashMap<Vector2<i8>, Tile>,
     painted: HashSet<Vector2<i8>>,
@@ -163,7 +139,7 @@ impl World {
     }
 
     fn known_bounds(&self) -> (Vector2<i8>, Vector2<i8>) {
-        //todo how efficint is this? is there a way to reuse the iterator?
+        //todo how efficient is this? is there a way to reuse the iterator?
         let min_x = self
             .known
             .clone()
