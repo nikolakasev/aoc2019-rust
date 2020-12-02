@@ -1,12 +1,12 @@
 use crate::intcode::ComputeResult::{CanContinue, Halt, WaitingForInput};
-use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use std::{collections::VecDeque, sync::mpsc};
 
 struct State {
     instruction_pointer: u32,
     intcode: Vec<i64>,
-    input: Vec<i64>,
+    input: VecDeque<i64>,
     output: Vec<i64>,
     relative_base: i64,
 }
@@ -28,7 +28,7 @@ fn state_from_string(string: &str) -> State {
     State {
         instruction_pointer: 0,
         intcode: str_to_intcode(string),
-        input: vec![],
+        input: VecDeque::new(),
         output: vec![],
         relative_base: 0,
     }
@@ -147,7 +147,7 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
         let memory_address = get_memory_address(c, offset + 1, state);
 
         //attempt to read from the input
-        match state.input.pop() {
+        match state.input.pop_front() {
             Some(v) => {
                 extend_memory(vec![(c, offset + 1)], state);
 
@@ -255,7 +255,7 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
 
 pub fn computer(intcode: &str, input: Vec<i64>) -> Result<Vec<i64>, String> {
     let mut state = state_from_string(intcode);
-    state.input = input;
+    state.input = input.into_iter().collect();
 
     loop {
         match compute(&mut state) {
@@ -288,14 +288,11 @@ pub fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i
                 }
 
                 WaitingForInput => {
-                    // println!("{} will wait for input, to pop {:?}", name, state.output);
-
                     pop_and_send(&mut state, &tx);
 
                     match rx.recv() {
                         Ok(v) => {
-                            //this won't work if multiple input instructions were provided
-                            state.input.push(v);
+                            state.input.push_back(v);
                             continue;
                         }
                         Err(e) => panic!("{} error: {}", name, e),
@@ -310,12 +307,12 @@ pub fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i
 }
 
 fn five_amplifiers_in_sequence(intcode: &str, phase_setting: Vec<i64>) -> i64 {
-    computer(intcode, vec![0, phase_setting[0]])
+    computer(intcode, vec![phase_setting[0], 0])
         //todo refactor pop for something immutable?
-        .and_then(|mut o| computer(intcode, vec![o.pop().unwrap(), phase_setting[1]]))
-        .and_then(|mut o| computer(intcode, vec![o.pop().unwrap(), phase_setting[2]]))
-        .and_then(|mut o| computer(intcode, vec![o.pop().unwrap(), phase_setting[3]]))
-        .and_then(|mut o| computer(intcode, vec![o.pop().unwrap(), phase_setting[4]]))
+        .and_then(|mut o| computer(intcode, vec![phase_setting[1], o.pop().unwrap()]))
+        .and_then(|mut o| computer(intcode, vec![phase_setting[2], o.pop().unwrap()]))
+        .and_then(|mut o| computer(intcode, vec![phase_setting[3], o.pop().unwrap()]))
+        .and_then(|mut o| computer(intcode, vec![phase_setting[4], o.pop().unwrap()]))
         //todo extract in a different way?
         .ok()
         .unwrap()
@@ -365,7 +362,7 @@ fn five_amplifiers_in_a_feedback_loop(
                 Err(_) => break Some(v),
             },
             //wasn't able to receive because E halted already and closed the channel
-            Err(_) => break None,
+            Err(e) => panic!(e),
         }
     }
 }
