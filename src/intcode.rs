@@ -354,17 +354,22 @@ fn five_amplifiers_in_a_feedback_loop(
     let _d = thread::spawn(move || async_computer(intcode, "D", rx_d, tx_e));
     let _e = thread::spawn(move || async_computer(intcode, "E", rx_e, tx_controller));
 
+    let mut last_value = 0;
+
     loop {
         match rx_controller.recv() {
             //forward the from E to A
             Ok(v) => match tx_a.send(v) {
-                Ok(_) => continue,
+                Ok(_) => {
+                    last_value = v;
+                    continue;
+                }
                 //isn't able to send, because A halted already,
                 //so this is the last output from E
                 Err(_) => break Some(v),
             },
             //wasn't able to receive because E halted already and closed the channel
-            Err(e) => panic!(e),
+            Err(e) => break Some(last_value),
         }
     }
 }
