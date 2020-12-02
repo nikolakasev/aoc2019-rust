@@ -168,7 +168,7 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
 
         Ok(CanContinue)
     }
-    //jump it true
+    //jump if true
     else if opcode == 5 {
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
@@ -181,7 +181,7 @@ fn compute(state: &mut State) -> Result<ComputeResult, String> {
 
         Ok(CanContinue)
     }
-    //jump it false
+    //jump if false
     else if opcode == 6 {
         let first_parameter = get_value(c, offset + 1, state);
         let second_parameter = get_value(b, offset + 2, state);
@@ -364,7 +364,8 @@ fn five_amplifiers_in_a_feedback_loop(
                 //so this is the last output from E
                 Err(_) => break Some(v),
             },
-            Err(e) => panic!(e),
+            //wasn't able to receive because E halted already and closed the channel
+            Err(_) => break None,
         }
     }
 }
