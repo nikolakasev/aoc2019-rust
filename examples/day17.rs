@@ -104,7 +104,7 @@ fn main() {
 
     let cloned = world.known.clone();
 
-    let result: i64 = world
+    let _result: i64 = world
         .known
         .into_iter()
         .filter(|(_, tile)| tile == "35")

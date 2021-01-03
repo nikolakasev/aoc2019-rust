@@ -1,7 +1,6 @@
 use crate::intcode::ComputeResult::{CanContinue, Halt, WaitingForInput};
+use std::collections::VecDeque;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
-use std::{collections::VecDeque, sync::mpsc};
 
 struct State {
     instruction_pointer: u32,
@@ -308,6 +307,7 @@ pub fn async_computer(intcode: &str, name: &str, rx: Receiver<i64>, tx: Sender<i
     }
 }
 
+#[cfg(test)]
 fn five_amplifiers_in_sequence(intcode: &str, phase_setting: Vec<i64>) -> i64 {
     computer(intcode, vec![phase_setting[0], 0])
         //todo refactor pop for something immutable?
@@ -322,6 +322,7 @@ fn five_amplifiers_in_sequence(intcode: &str, phase_setting: Vec<i64>) -> i64 {
         .unwrap()
 }
 
+#[cfg(test)]
 fn five_amplifiers_in_a_feedback_loop(
     intcode: &'static str,
     phase_setting: Vec<i32>,
@@ -333,12 +334,12 @@ fn five_amplifiers_in_a_feedback_loop(
         phase_setting.len()
     );
 
-    let (tx_controller, rx_controller): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let (tx_a, rx_a): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let (tx_b, rx_b): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let (tx_c, rx_c): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let (tx_d, rx_d): (Sender<i64>, Receiver<i64>) = mpsc::channel();
-    let (tx_e, rx_e): (Sender<i64>, Receiver<i64>) = mpsc::channel();
+    let (tx_controller, rx_controller): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
+    let (tx_a, rx_a): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
+    let (tx_b, rx_b): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
+    let (tx_c, rx_c): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
+    let (tx_d, rx_d): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
+    let (tx_e, rx_e): (Sender<i64>, Receiver<i64>) = std::sync::mpsc::channel();
 
     tx_a.send(phase_setting[0] as i64)
         .and_then(|_| tx_a.send(0))
@@ -348,11 +349,11 @@ fn five_amplifiers_in_a_feedback_loop(
         .and_then(|_| tx_e.send(phase_setting[4] as i64))
         .unwrap();
 
-    let _a = thread::spawn(move || async_computer(intcode, "A", rx_a, tx_b));
-    let _b = thread::spawn(move || async_computer(intcode, "B", rx_b, tx_c));
-    let _c = thread::spawn(move || async_computer(intcode, "C", rx_c, tx_d));
-    let _d = thread::spawn(move || async_computer(intcode, "D", rx_d, tx_e));
-    let _e = thread::spawn(move || async_computer(intcode, "E", rx_e, tx_controller));
+    let _a = std::thread::spawn(move || async_computer(intcode, "A", rx_a, tx_b));
+    let _b = std::thread::spawn(move || async_computer(intcode, "B", rx_b, tx_c));
+    let _c = std::thread::spawn(move || async_computer(intcode, "C", rx_c, tx_d));
+    let _d = std::thread::spawn(move || async_computer(intcode, "D", rx_d, tx_e));
+    let _e = std::thread::spawn(move || async_computer(intcode, "E", rx_e, tx_controller));
 
     let mut last_value = 0;
 
@@ -369,7 +370,7 @@ fn five_amplifiers_in_a_feedback_loop(
                 Err(_) => break Some(v),
             },
             //wasn't able to receive because E halted already and closed the channel
-            Err(e) => break Some(last_value),
+            Err(_e) => break Some(last_value),
         }
     }
 }
